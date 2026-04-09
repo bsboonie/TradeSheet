@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- ╔══════════════════════════════════════════════════════════════╗
-     ║  TRADESHEET v1.0.0 — Options Spread Analyzer                ║
+     ║  TRADESHEET v1.0.1 — Options Spread Analyzer                ║
      ║  Built: 2026-04-08                                           ║
      ║  Changes:                                                    ║
      ║    1. Initial build                                          ║
@@ -866,9 +866,29 @@ function renderExpSelector() {
   `).join('');
 }
 
-function selectExp(date) {
+async function selectExp(date) {
   state.selectedExp = date;
   renderExpSelector();
+  updateDerived();
+
+  // Fetch chain on-demand if not already loaded
+  if (!state.allChains[date]) {
+    setStatus('loading', `Loading chain for ${date}...`);
+    try {
+      const r = await fetch(`${TRADIER}/markets/options/chains?symbol=${state.ticker}&expiration=${date}&greeks=true`, {headers: TRADIER_HDR});
+      const d = await r.json();
+      const opts = d.options?.option;
+      if (opts) {
+        const arr = Array.isArray(opts) ? opts : [opts];
+        state.allChains[date] = normalizeChain(arr, date);
+      }
+      setStatus('ok', `${state.ticker} loaded ✓`);
+    } catch(e) {
+      setStatus('error', `Chain fetch failed: ${e.message}`);
+    }
+  }
+
+  state.chain = state.allChains[date] || [];
   runScanner();
   updateDerived();
 }
@@ -941,8 +961,8 @@ function calcIVRank(days) {
 // ── TRADIER: OPTION CHAINS ────────────────────────────────────────
 async function fetchChains(ticker) {
   state.allChains = {};
-  // Fetch up to 3 expirations
-  const exps = state.expirations.slice(0, 3);
+  // Fetch all available expirations (up to 6)
+  const exps = state.expirations.slice(0, 6);
   for (const exp of exps) {
     try {
       const r = await fetch(`${TRADIER}/markets/options/chains?symbol=${ticker}&expiration=${exp.date}&greeks=true`, {headers: TRADIER_HDR});
@@ -1815,7 +1835,7 @@ setTradeType('Call Spread'); // default to most common use case
 </script>
 
 <!-- ╔══════════════════════════════════════════════════════════════╗
-     ║  END TRADESHEET v1.0.0 — Options Spread Analyzer            ║
+     ║  END TRADESHEET v1.0.1 — Options Spread Analyzer            ║
      ╚══════════════════════════════════════════════════════════════╝ -->
 </body>
 </html>
