@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <!-- ╔══════════════════════════════════════════════════════════════╗
-     ║  TRADESHEET v1.2.0 — Merge-Ready Build | Built: 2026-04-09  ║
-     ║  Changes from v1.1.0:                                        ║
-     ║    1. Removed postMessage TS_LOG_TRADE listener              ║
-     ║    2. Confirmed Firebase collection: tradesheet (isolated)   ║
-     ║    3. Confirmed trade schema matches merge contract          ║
-     ║    4. Fixed lm-calc show/hide on sale price entry/clear      ║
-     ║    5. Version stamp updated                                  ║
+     ║  TRADESHEET v1.3.0 — Scan On Demand | Built: 2026-04-09     ║
+     ║  Changes from v1.0.1:                                        ║
+     ║    1. Production Tradier API key + endpoint                  ║
+     ║    2. window.TS module pattern + public API                  ║
+     ║    3. Firebase config wired — tradesheet collection          ║
+     ║    4. lm-calc show/hide fix (clears on empty sale)           ║
+     ║    5. No postMessage listener                                ║
+     ║    6. Scan on demand — no auto-scan on fetch                 ║
+     ║    7. selectExp scans selected exp only                      ║
+     ║    8. No exp pre-selected on load                            ║
      ╚══════════════════════════════════════════════════════════════╝ -->
 <html lang="en">
 <head>
@@ -310,7 +313,7 @@ select.mi{cursor:pointer;}
         </div>
         <div class="dash-section">
           <div class="dash-sec-title"><span></span>TOP CALLS<span></span></div>
-          <div id="call-results"><div class="no-data">Fetch a ticker to scan spreads</div></div>
+          <div id="call-results"><div class="no-data">Select an expiration to scan</div></div>
         </div>
         <div class="checks-grid" id="call-checks" style="display:none;">
           <div class="check-item"><span class="check-label">Quotes available?</span><span class="check-val" id="ck-c-quotes">—</span></div>
@@ -342,7 +345,7 @@ select.mi{cursor:pointer;}
         </div>
         <div class="dash-section">
           <div class="dash-sec-title"><span></span>TOP PUTS<span></span></div>
-          <div id="put-results"><div class="no-data">Fetch a ticker to scan spreads</div></div>
+          <div id="put-results"><div class="no-data">Select an expiration to scan</div></div>
         </div>
         <div class="checks-grid" id="put-checks" style="display:none;">
           <div class="check-item"><span class="check-label">Quotes available?</span><span class="check-val" id="ck-p-quotes">—</span></div>
@@ -390,6 +393,8 @@ select.mi{cursor:pointer;}
             <div class="type-selector">
               <button class="type-btn call active" id="tb-lc" onclick="setTradeType('Long Call')">LONG CALL</button>
               <button class="type-btn put" id="tb-lp" onclick="setTradeType('Long Put')">LONG PUT</button>
+              <button class="type-btn call" id="tb-cs" onclick="setTradeType('Call Spread')">CALL SPREAD</button>
+              <button class="type-btn put" id="tb-ps" onclick="setTradeType('Put Spread')">PUT SPREAD</button>
             </div>
           </div>
 
@@ -522,6 +527,8 @@ select.mi{cursor:pointer;}
         <button class="filter-btn" onclick="setLogFilter('closed',this)">CLOSED</button>
         <button class="filter-btn" onclick="setLogFilter('Long Call',this)">LONG CALL</button>
         <button class="filter-btn" onclick="setLogFilter('Long Put',this)">LONG PUT</button>
+        <button class="filter-btn" onclick="setLogFilter('Call Spread',this)">CALL SPREAD</button>
+        <button class="filter-btn" onclick="setLogFilter('Put Spread',this)">PUT SPREAD</button>
       </div>
       <div class="log-table-wrap">
         <table class="log-table">
@@ -552,16 +559,16 @@ select.mi{cursor:pointer;}
       <div class="mf"><div class="ml">Ticker</div><input class="mi" id="lm-ticker" style="text-transform:uppercase;"></div>
       <div class="mf"><div class="ml">Type</div>
         <select class="mi" id="lm-type" onchange="logModalTypeChange()">
-          <option>Long Call</option>
-          <option>Long Put</option>
+          <option>Long Call</option><option>Call Spread</option>
+          <option>Long Put</option><option>Put Spread</option>
         </select>
       </div>
       <div class="mf"><div class="ml">Buy Strike</div><input class="mi" id="lm-buy" type="number" step="0.5"></div>
-      <div class="mf spread-only hidden" id="lm-sell-wrap"><div class="ml">Sell Strike</div><input class="mi" id="lm-sell" type="number" step="0.5"></div>
+      <div class="mf spread-only" id="lm-sell-wrap"><div class="ml">Sell Strike</div><input class="mi" id="lm-sell" type="number" step="0.5"></div>
       <div class="mf"><div class="ml">Exp Date</div><input class="mi" id="lm-exp" type="date"></div>
       <div class="mf"><div class="ml">Contracts</div><input class="mi" id="lm-qty" type="number" value="1" min="1"></div>
       <div class="mf"><div class="ml">Cost $ (total)</div><input class="mi" id="lm-cost" type="number" step="0.01"></div>
-      <div class="mf spread-only hidden" id="lm-profit-wrap"><div class="ml">Max Profit $</div><input class="mi" id="lm-profit" type="number" step="0.01"></div>
+      <div class="mf spread-only" id="lm-profit-wrap"><div class="ml">Max Profit $</div><input class="mi" id="lm-profit" type="number" step="0.01"></div>
       <div class="mf"><div class="ml">IV Rank</div><input class="mi" id="lm-ivr" type="number" step="0.1"></div>
       <div class="mf"><div class="ml">Entry Date</div><input class="mi" id="lm-entry" type="date"></div>
       <div class="mf mf-full">
@@ -573,7 +580,7 @@ select.mi{cursor:pointer;}
           <button class="out-btn" id="ob-be" onclick="selectOutcome('Breakeven')">➖ B/E</button>
         </div>
       </div>
-      <div class="mf mf-full" id="lm-sale-wrap" style="display:none;"><div class="ml">Sale Price (per share)</div><input class="mi" id="lm-sale" type="number" step="0.01" oninput="calcLogPL()"></div>
+      <div class="mf spread-only" id="lm-sale-wrap"><div class="ml">Sale Price (per share)</div><input class="mi" id="lm-sale" type="number" step="0.01" oninput="calcLogPL()"></div>
       <div class="mf mf-full"><div class="modal-calc" id="lm-calc" style="display:none;">—</div></div>
     </div>
     <div class="modal-actions">
@@ -591,8 +598,8 @@ select.mi{cursor:pointer;}
       <div class="mf"><div class="ml">Ticker</div><input class="mi" id="em-ticker" style="text-transform:uppercase;"></div>
       <div class="mf"><div class="ml">Type</div>
         <select class="mi" id="em-type" onchange="editModalTypeChange()">
-          <option>Long Call</option>
-          <option>Long Put</option>
+          <option>Long Call</option><option>Call Spread</option>
+          <option>Long Put</option><option>Put Spread</option>
         </select>
       </div>
       <div class="mf"><div class="ml">Buy Strike</div><input class="mi" id="em-buy" type="number" step="0.5"></div>
@@ -655,7 +662,7 @@ window.dispatchEvent(new Event('fb-ready'));
 
 <script>
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  TRADESHEET v1.2.0 — Main Script                            ║
+// ║  TRADESHEET v1.3.0 — Main Script                            ║
 // ╚══════════════════════════════════════════════════════════════╝
 
 window.TS = (function() {
@@ -771,12 +778,11 @@ async function fetchAll() {
     await fetchHistorical(ticker);
     setStatus('loading', 'Fetching option chains...');
 
-    // 4. Option chains for selected expirations
+    // 4. Option chains for all expirations (pre-load)
     await fetchChains(ticker);
 
-    setStatus('ok', `${ticker} loaded ✓`);
-    runScanner();
-    updateDerived();
+    setStatus('ok', `${ticker} loaded ✓ — select an expiration to scan`);
+    // No auto-scan — user selects expiration to trigger results
 
   } catch(e) {
     console.error(e);
@@ -840,10 +846,8 @@ async function fetchExpirations(ticker) {
       return { date: dt, dte, earningsBefore };
     });
 
-  // Auto-select first safe expiration
-  const safe = state.expirations.find(e => !e.earningsBefore) || state.expirations[0];
-  if (safe) state.selectedExp = safe.date;
-
+  // No expiration pre-selected — user must choose
+  state.selectedExp = '';
   renderExpSelector();
 }
 
@@ -865,7 +869,6 @@ function renderExpSelector() {
 async function selectExp(date) {
   state.selectedExp = date;
   renderExpSelector();
-  updateDerived();
 
   // Fetch chain on-demand if not already loaded
   if (!state.allChains[date]) {
@@ -885,8 +888,8 @@ async function selectExp(date) {
   }
 
   state.chain = state.allChains[date] || [];
-  runScanner();
   updateDerived();
+  runScanner();
 }
 
 // ── TRADIER: HISTORICAL → ATR + IV RANK ──────────────────────────
@@ -1003,7 +1006,16 @@ function normalizeChain(options, expDate) {
 
 // ── SCANNER ───────────────────────────────────────────────────────
 function runScanner() {
-  if (!state.price || !Object.keys(state.allChains).length) return;
+  if (!state.price || !state.selectedExp || !state.allChains[state.selectedExp]) {
+    // No exp selected yet — clear results
+    state.scanResults.calls = [];
+    state.scanResults.puts = [];
+    state.selectedCall = null;
+    state.selectedPut = null;
+    renderResults();
+    renderPayoff();
+    return;
+  }
 
   const budget = parseFloat(document.getElementById('max-budget').value) || 200;
   const minRR = parseFloat(document.getElementById('min-rr').value) || 1.5;
@@ -1012,123 +1024,125 @@ function runScanner() {
   const maxDelta = parseFloat(document.getElementById('max-delta').value) || 0.70;
   const contracts = parseInt(document.getElementById('contracts').value) || 1;
   const ivRank = parseFloat(document.getElementById('ivr-val').value) || 0;
-  const earningsDate = document.getElementById('earnings-date').value;
   const isSpread = ['Call Spread','Put Spread'].includes(state.tradeType);
 
-  const allCallSpreads = [];
-  const allPutSpreads = [];
+  const allCallResults = [];
+  const allPutResults = [];
 
-  for (const [expDate, chain] of Object.entries(state.allChains)) {
-    const expInfo = state.expirations.find(e => e.date === expDate);
-    if (!expInfo) continue;
-    const dte = expInfo.dte;
-    const earningsBefore = expInfo.earningsBefore;
+  // Scan only the selected expiration
+  const expDate = state.selectedExp;
+  const chain = state.allChains[expDate];
+  if (!chain) { renderResults(); renderPayoff(); return; }
 
-    // ATM detection
-    let atmStrike = chain.reduce((best, row) =>
-      Math.abs(row.strike - state.price) < Math.abs(best.strike - state.price) ? row : best
-    , chain[0]);
+  const expInfo = state.expirations.find(e => e.date === expDate);
+  if (!expInfo) { renderResults(); renderPayoff(); return; }
+  const dte = expInfo.dte;
+  const earningsBefore = expInfo.earningsBefore;
 
-    const atmCall = atmStrike?.call;
-    const atmPut = atmStrike?.put;
-    const expMove = atmCall && atmPut ? (atmCall.price + atmPut.price) : 0;
-    const expUpper = state.price + expMove;
-    const expLower = state.price - expMove;
+  // ATM detection
+  let atmStrike = chain.reduce((best, row) =>
+    Math.abs(row.strike - state.price) < Math.abs(best.strike - state.price) ? row : best
+  , chain[0]);
 
-    // Scan CALL side
-    if (['Long Call', 'Call Spread'].includes(state.tradeType) || isAllType()) {
-      for (let i = 0; i < chain.length; i++) {
-        const buyRow = chain[i];
-        if (!buyRow.call) continue;
-        const buyDelta = Math.abs(buyRow.call.delta);
-        if (buyDelta < minDelta || buyDelta > maxDelta) continue;
+  const atmCall = atmStrike?.call;
+  const atmPut = atmStrike?.put;
+  const expMove = atmCall && atmPut ? (atmCall.price + atmPut.price) : 0;
+  const expUpper = state.price + expMove;
+  const expLower = state.price - expMove;
 
-        if (!isSpread && state.tradeType === 'Long Call') {
-          // Long Call — single leg
-          const cost = buyRow.call.price * 100 * contracts;
+  // Scan CALL side
+  if (['Long Call', 'Call Spread'].includes(state.tradeType) || isAllType()) {
+    for (let i = 0; i < chain.length; i++) {
+      const buyRow = chain[i];
+      if (!buyRow.call) continue;
+      const buyDelta = Math.abs(buyRow.call.delta);
+      if (buyDelta < minDelta || buyDelta > maxDelta) continue;
+
+      if (!isSpread && state.tradeType === 'Long Call') {
+        // Long Call — single leg
+        const cost = buyRow.call.price * 100 * contracts;
+        if (cost > budget) continue;
+        const breakeven = buyRow.strike + buyRow.call.price;
+        const pop = buyDelta;
+        const score = scoreCandidate({ cost, rr: null, cw: null, dte, ivRank, pop, earningsBefore, isSpread: false, breakeven, expUpper, expLower, atrRange: calcATRRange(dte) });
+        allCallResults.push({ type:'Long Call', buyStrike: buyRow.strike, sellStrike: null, exp: expDate, dte, cost, maxProfit: null, rr: null, cw: null, pop, ev: null, breakeven, score, rating: rateScore(score), earningsBefore });
+      } else if (state.tradeType === 'Call Spread' || isAllType()) {
+        // Call Spread — find sell strike
+        for (let j = i + 1; j < chain.length; j++) {
+          const sellRow = chain[j];
+          if (!sellRow.call) continue;
+          const net = buyRow.call.price - sellRow.call.price;
+          if (net <= 0) continue;
+          const width = sellRow.strike - buyRow.strike;
+          const cost = net * 100 * contracts;
           if (cost > budget) continue;
-          const breakeven = buyRow.strike + buyRow.call.price;
+          const maxProfit = (width - net) * 100 * contracts;
+          const rr = maxProfit / cost;
+          if (rr < minRR) continue;
+          const cw = net / width;
+          if (cw > maxCW) continue;
+          const breakeven = buyRow.strike + net;
           const pop = buyDelta;
-          const score = scoreCandidate({ cost, rr: null, cw: null, dte, ivRank, pop, earningsBefore, isSpread: false, breakeven, expUpper, expLower, atrRange: calcATRRange(dte) });
-          allCallSpreads.push({ type:'Long Call', buyStrike: buyRow.strike, sellStrike: null, exp: expDate, dte, cost, maxProfit: null, rr: null, cw: null, pop, ev: null, breakeven, score, rating: rateScore(score), earningsBefore });
-        } else if (state.tradeType === 'Call Spread' || isAllType()) {
-          // Call Spread — find sell strike
-          for (let j = i + 1; j < chain.length; j++) {
-            const sellRow = chain[j];
-            if (!sellRow.call) continue;
-            const net = buyRow.call.price - sellRow.call.price;
-            if (net <= 0) continue;
-            const width = sellRow.strike - buyRow.strike;
-            const cost = net * 100 * contracts;
-            if (cost > budget) continue;
-            const maxProfit = (width - net) * 100 * contracts;
-            const rr = maxProfit / cost;
-            if (rr < minRR) continue;
-            const cw = net / width;
-            if (cw > maxCW) continue;
-            const breakeven = buyRow.strike + net;
-            const pop = buyDelta;
-            const ev = pop * maxProfit - (1 - pop) * cost;
-            const atrRange = calcATRRange(dte);
-            const score = scoreCandidate({ cost, rr, cw, dte, ivRank, pop, earningsBefore, isSpread: true, breakeven, expUpper, expLower, atrRange });
-            allCallSpreads.push({ type:'Call Spread', buyStrike: buyRow.strike, sellStrike: sellRow.strike, exp: expDate, dte, cost, maxProfit, rr, cw, pop, ev: Math.round(ev * 100) / 100, breakeven, score, rating: rateScore(score), earningsBefore });
-            break; // only nearest sell strike
-          }
-        }
-      }
-    }
-
-    // Scan PUT side
-    if (['Long Put', 'Put Spread'].includes(state.tradeType) || isAllType()) {
-      for (let i = chain.length - 1; i >= 0; i--) {
-        const buyRow = chain[i];
-        if (!buyRow.put) continue;
-        const buyDelta = Math.abs(buyRow.put.delta);
-        if (buyDelta < minDelta || buyDelta > maxDelta) continue;
-
-        if (!isSpread && state.tradeType === 'Long Put') {
-          const cost = buyRow.put.price * 100 * contracts;
-          if (cost > budget) continue;
-          const breakeven = buyRow.strike - buyRow.put.price;
-          const pop = buyDelta;
-          const score = scoreCandidate({ cost, rr: null, cw: null, dte, ivRank, pop, earningsBefore, isSpread: false, breakeven, expUpper: expLower, expLower: expUpper, atrRange: calcATRRange(dte) });
-          allPutSpreads.push({ type:'Long Put', buyStrike: buyRow.strike, sellStrike: null, exp: expDate, dte, cost, maxProfit: null, rr: null, cw: null, pop, ev: null, breakeven, score, rating: rateScore(score), earningsBefore });
-        } else if (state.tradeType === 'Put Spread' || isAllType()) {
-          for (let j = i - 1; j >= 0; j--) {
-            const sellRow = chain[j];
-            if (!sellRow.put) continue;
-            const net = buyRow.put.price - sellRow.put.price;
-            if (net <= 0) continue;
-            const width = buyRow.strike - sellRow.strike;
-            const cost = net * 100 * contracts;
-            if (cost > budget) continue;
-            const maxProfit = (width - net) * 100 * contracts;
-            const rr = maxProfit / cost;
-            if (rr < minRR) continue;
-            const cw = net / width;
-            if (cw > maxCW) continue;
-            const breakeven = buyRow.strike - net;
-            const pop = buyDelta;
-            const ev = pop * maxProfit - (1 - pop) * cost;
-            const atrRange = calcATRRange(dte);
-            const score = scoreCandidate({ cost, rr, cw, dte, ivRank, pop, earningsBefore, isSpread: true, breakeven, expUpper: expLower, expLower: expUpper, atrRange });
-            allPutSpreads.push({ type:'Put Spread', buyStrike: buyRow.strike, sellStrike: sellRow.strike, exp: expDate, dte, cost, maxProfit, rr, cw, pop, ev: Math.round(ev * 100) / 100, breakeven, score, rating: rateScore(score), earningsBefore });
-            break;
-          }
+          const ev = pop * maxProfit - (1 - pop) * cost;
+          const atrRange = calcATRRange(dte);
+          const score = scoreCandidate({ cost, rr, cw, dte, ivRank, pop, earningsBefore, isSpread: true, breakeven, expUpper, expLower, atrRange });
+          allCallResults.push({ type:'Call Spread', buyStrike: buyRow.strike, sellStrike: sellRow.strike, exp: expDate, dte, cost, maxProfit, rr, cw, pop, ev: Math.round(ev * 100) / 100, breakeven, score, rating: rateScore(score), earningsBefore });
+          break; // only nearest sell strike
         }
       }
     }
   }
 
-  allCallSpreads.sort((a,b) => b.score - a.score);
-  allPutSpreads.sort((a,b) => b.score - a.score);
+  // Scan PUT side
+  if (['Long Put', 'Put Spread'].includes(state.tradeType) || isAllType()) {
+    for (let i = chain.length - 1; i >= 0; i--) {
+      const buyRow = chain[i];
+      if (!buyRow.put) continue;
+      const buyDelta = Math.abs(buyRow.put.delta);
+      if (buyDelta < minDelta || buyDelta > maxDelta) continue;
 
-  state.scanResults.calls = allCallSpreads;
-  state.scanResults.puts = allPutSpreads;
+      if (!isSpread && state.tradeType === 'Long Put') {
+        const cost = buyRow.put.price * 100 * contracts;
+        if (cost > budget) continue;
+        const breakeven = buyRow.strike - buyRow.put.price;
+        const pop = buyDelta;
+        const score = scoreCandidate({ cost, rr: null, cw: null, dte, ivRank, pop, earningsBefore, isSpread: false, breakeven, expUpper: expLower, expLower: expUpper, atrRange: calcATRRange(dte) });
+        allPutResults.push({ type:'Long Put', buyStrike: buyRow.strike, sellStrike: null, exp: expDate, dte, cost, maxProfit: null, rr: null, cw: null, pop, ev: null, breakeven, score, rating: rateScore(score), earningsBefore });
+      } else if (state.tradeType === 'Put Spread' || isAllType()) {
+        for (let j = i - 1; j >= 0; j--) {
+          const sellRow = chain[j];
+          if (!sellRow.put) continue;
+          const net = buyRow.put.price - sellRow.put.price;
+          if (net <= 0) continue;
+          const width = buyRow.strike - sellRow.strike;
+          const cost = net * 100 * contracts;
+          if (cost > budget) continue;
+          const maxProfit = (width - net) * 100 * contracts;
+          const rr = maxProfit / cost;
+          if (rr < minRR) continue;
+          const cw = net / width;
+          if (cw > maxCW) continue;
+          const breakeven = buyRow.strike - net;
+          const pop = buyDelta;
+          const ev = pop * maxProfit - (1 - pop) * cost;
+          const atrRange = calcATRRange(dte);
+          const score = scoreCandidate({ cost, rr, cw, dte, ivRank, pop, earningsBefore, isSpread: true, breakeven, expUpper: expLower, expLower: expUpper, atrRange });
+          allPutResults.push({ type:'Put Spread', buyStrike: buyRow.strike, sellStrike: sellRow.strike, exp: expDate, dte, cost, maxProfit, rr, cw, pop, ev: Math.round(ev * 100) / 100, breakeven, score, rating: rateScore(score), earningsBefore });
+          break;
+        }
+      }
+    }
+  }
+
+  allCallResults.sort((a,b) => b.score - a.score);
+  allPutResults.sort((a,b) => b.score - a.score);
+
+  state.scanResults.calls = allCallResults;
+  state.scanResults.puts = allPutResults;
 
   // Auto-select top results
-  state.selectedCall = allCallSpreads[0] || null;
-  state.selectedPut = allPutSpreads[0] || null;
+  state.selectedCall = allCallResults[0] || null;
+  state.selectedPut = allPutResults[0] || null;
 
   renderResults();
   renderPayoff();
@@ -1402,17 +1416,13 @@ function setTradeType(type) {
   state.tradeType = type;
   const isSpread = ['Call Spread', 'Put Spread'].includes(type);
 
-  // Button states — only lc and lp buttons exist in UI
-  ['lc','lp'].forEach(id => {
-    const el = document.getElementById('tb-' + id);
-    if (el) el.classList.remove('active');
+  // Button states
+  ['lc','lp','cs','ps'].forEach(id => {
+    document.getElementById('tb-' + id).classList.remove('active');
   });
-  const map = {'Long Call':'lc','Long Put':'lp'};
-  const btnId = map[type];
-  if (btnId) {
-    const btn = document.getElementById('tb-' + btnId);
-    if (btn) btn.classList.add('active');
-  }
+  const map = {'Long Call':'lc','Long Put':'lp','Call Spread':'cs','Put Spread':'ps'};
+  const btn = document.getElementById('tb-' + map[type]);
+  btn.classList.add('active');
 
   // Show/hide spread-only fields
   document.querySelectorAll('.spread-only').forEach(el => {
@@ -1508,7 +1518,7 @@ async function loadTrades() {
 }
 
 async function saveTrade(trade) {
-  trade.source = 'tradesheet'; // identify origin for TradeBrief integration
+  trade.source = 'tradesheet';
   if (!window._fbReady) {
     trade.id = Date.now().toString();
     state.trades.unshift(trade);
@@ -1655,7 +1665,7 @@ function logModalTypeChange() {
   const isSpread = type.includes('Spread');
   document.getElementById('lm-sell-wrap').style.display = isSpread ? 'flex' : 'none';
   document.getElementById('lm-profit-wrap').style.display = isSpread ? 'flex' : 'none';
-  // lm-sale-wrap and lm-calc visibility is controlled by selectOutcome(), not trade type
+  document.getElementById('lm-sale-wrap').style.display = isSpread ? 'flex' : 'none';
 }
 
 function selectOutcome(outcome) {
@@ -1839,75 +1849,59 @@ document.addEventListener('keydown', e => {
 
 // ── INIT ──────────────────────────────────────────────────────────
 applyTheme();
-setTradeType('Long Call');
+setTradeType('Call Spread'); // default
 
 // ── EXPOSE GLOBALS FOR HTML INLINE HANDLERS ───────────────────────
-// All onclick="..." attributes in HTML call these directly
-window.fetchAll           = fetchAll;
-window.toggleTheme        = toggleTheme;
-window.setTradeType       = setTradeType;
-window.selectExp          = selectExp;
-window.toggleOverride     = toggleOverride;
+window.fetchAll               = fetchAll;
+window.toggleTheme            = toggleTheme;
+window.setTradeType           = setTradeType;
+window.selectExp              = selectExp;
+window.toggleOverride         = toggleOverride;
 window.toggleEarningsOverride = toggleEarningsOverride;
-window.onEarningsChange   = onEarningsChange;
-window.runScanner         = runScanner;
-window.updateDerived      = updateDerived;
-window.adjustN            = adjustN;
-window.callSelectRow      = callSelectRow;
-window.putSelectRow       = putSelectRow;
-window.toggleLog          = toggleLog;
-window.setLogFilter       = setLogFilter;
-window.openLogModal       = openLogModal;
-window.closeLogModal      = closeLogModal;
-window.logModalTypeChange = logModalTypeChange;
-window.selectOutcome      = selectOutcome;
-window.calcLogPL          = calcLogPL;
-window.confirmLogTrade    = confirmLogTrade;
-window.openEditModal      = openEditModal;
-window.closeEditModal     = closeEditModal;
-window.editModalTypeChange = editModalTypeChange;
-window.selectEditOutcome  = selectEditOutcome;
-window.calcEditPL         = calcEditPL;
-window.confirmEditTrade   = confirmEditTrade;
-window.deleteEditingTrade = deleteEditingTrade;
-window.confirmDelete      = confirmDelete;
+window.onEarningsChange       = onEarningsChange;
+window.runScanner             = runScanner;
+window.updateDerived          = updateDerived;
+window.adjustN                = adjustN;
+window.callSelectRow          = callSelectRow;
+window.putSelectRow           = putSelectRow;
+window.toggleLog              = toggleLog;
+window.setLogFilter           = setLogFilter;
+window.openLogModal           = openLogModal;
+window.closeLogModal          = closeLogModal;
+window.logModalTypeChange     = logModalTypeChange;
+window.selectOutcome          = selectOutcome;
+window.calcLogPL              = calcLogPL;
+window.confirmLogTrade        = confirmLogTrade;
+window.openEditModal          = openEditModal;
+window.closeEditModal         = closeEditModal;
+window.editModalTypeChange    = editModalTypeChange;
+window.selectEditOutcome      = selectEditOutcome;
+window.calcEditPL             = calcEditPL;
+window.confirmEditTrade       = confirmEditTrade;
+window.deleteEditingTrade     = deleteEditingTrade;
+window.confirmDelete          = confirmDelete;
 
 // ── PUBLIC API: window.TS ─────────────────────────────────────────
-// Called by TradeBrief and postMessage integration
-
-/** Re-fetch the current ticker from Tradier */
 function fetchTicker(ticker) {
   if (ticker) document.getElementById('ticker-input').value = ticker;
   return fetchAll();
 }
 
-/** Returns currently selected call and put scan results */
 function getSelectedSpread() {
   return { call: state.selectedCall, put: state.selectedPut };
 }
 
-/** Returns full trade log array (copy) */
 function getTrades() {
   return [...state.trades];
 }
 
-/**
- * Opens the Log Trade modal.
- * @param {string|object} sideOrObj — 'call' | 'put' (existing behavior)
- *   OR a trade object: { ticker, type, buyStrike, sellStrike, expDate,
- *                        contracts, cost, maxProfit, ivRank }
- *   to pre-populate from TradeBrief or postMessage.
- */
 function openLogModalPublic(sideOrObj) {
   if (typeof sideOrObj === 'string') {
-    // Existing internal usage: side = 'call' | 'put'
     openLogModal(sideOrObj);
     return;
   }
-  // External usage: pre-populate from passed trade object
   const t = sideOrObj || {};
-  const type = (t.type === 'Long Put') ? 'Long Put' : 'Long Call';
-
+  const type = (['Long Call','Long Put','Call Spread','Put Spread'].includes(t.type)) ? t.type : 'Long Call';
   document.getElementById('lm-ticker').value = t.ticker || state.ticker || '';
   document.getElementById('lm-type').value = type;
   document.getElementById('lm-buy').value = t.buyStrike || '';
@@ -1938,7 +1932,7 @@ return {
 </script>
 
 <!-- ╔══════════════════════════════════════════════════════════════╗
-     ║  END TRADESHEET v1.2.0 — Merge-Ready Build | 2026-04-09     ║
+     ║  END TRADESHEET v1.3.0 — Scan On Demand | 2026-04-09        ║
      ╚══════════════════════════════════════════════════════════════╝ -->
 </body>
 </html>
