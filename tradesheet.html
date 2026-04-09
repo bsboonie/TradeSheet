@@ -1,17 +1,12 @@
 <!DOCTYPE html>
 <!-- ╔══════════════════════════════════════════════════════════════╗
-     ║  TRADESHEET v1.1.0 — Integration Ready | Built: 2026-04-09  ║
-     ║  Changes:                                                    ║
-     ║    1. Switched to Tradier production API                     ║
-     ║    2. Removed Call Spread / Put Spread (Long Call/Put only)  ║
-     ║    3. window.TS module pattern (matches TradeBrief window.TJ)║
-     ║    4. window.TS.getTrades() public API                       ║
-     ║    5. window.TS.openLogModal(tradeObj) public API            ║
-     ║    6. Standardized trade object schema + source field        ║
-     ║    7. Fixed lm-calc / lm-sale-wrap display bug               ║
-     ║    8. Firebase tradesheet collection (isolated from TradeBrief)║
-     ║    9. Version stamp top + bottom                             ║
-     ║   10. postMessage listener for TS_LOG_TRADE                  ║
+     ║  TRADESHEET v1.2.0 — Merge-Ready Build | Built: 2026-04-09  ║
+     ║  Changes from v1.1.0:                                        ║
+     ║    1. Removed postMessage TS_LOG_TRADE listener              ║
+     ║    2. Confirmed Firebase collection: tradesheet (isolated)   ║
+     ║    3. Confirmed trade schema matches merge contract          ║
+     ║    4. Fixed lm-calc show/hide on sale price entry/clear      ║
+     ║    5. Version stamp updated                                  ║
      ╚══════════════════════════════════════════════════════════════╝ -->
 <html lang="en">
 <head>
@@ -660,7 +655,7 @@ window.dispatchEvent(new Event('fb-ready'));
 
 <script>
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  TRADESHEET v1.1.0 — Main Script                            ║
+// ║  TRADESHEET v1.2.0 — Main Script                            ║
 // ╚══════════════════════════════════════════════════════════════╝
 
 window.TS = (function() {
@@ -1675,12 +1670,18 @@ function selectOutcome(outcome) {
 }
 
 function calcLogPL() {
+  const saleInput = document.getElementById('lm-sale');
+  const el = document.getElementById('lm-calc');
+  const sale = parseFloat(saleInput.value);
+  if (!saleInput.value || isNaN(sale)) {
+    el.style.display = 'none';
+    el.textContent = '—';
+    return;
+  }
   const cost = parseFloat(document.getElementById('lm-cost').value) || 0;
-  const sale = parseFloat(document.getElementById('lm-sale').value) || 0;
   const qty = parseInt(document.getElementById('lm-qty').value) || 1;
   const pl = (sale - cost) * qty;
-  const el = document.getElementById('lm-calc');
-  el.style.display = 'block'; // ensure visible when sale price entered
+  el.style.display = 'block';
   el.textContent = `P/L: ${pl >= 0 ? '+' : ''}$${pl.toFixed(2)}`;
   el.style.color = pl >= 0 ? 'var(--good)' : 'var(--danger)';
 }
@@ -1925,14 +1926,6 @@ function openLogModalPublic(sideOrObj) {
   document.getElementById('log-modal').style.display = 'flex';
 }
 
-// ── postMessage LISTENER ──────────────────────────────────────────
-// TradeBrief sends: { type: 'TS_LOG_TRADE', payload: tradeObj }
-window.addEventListener('message', (e) => {
-  if (e.data?.type === 'TS_LOG_TRADE' && e.data?.payload) {
-    openLogModalPublic(e.data.payload);
-  }
-});
-
 return {
   fetchTicker,
   getSelectedSpread,
@@ -1945,7 +1938,7 @@ return {
 </script>
 
 <!-- ╔══════════════════════════════════════════════════════════════╗
-     ║  END TRADESHEET v1.1.0 — Integration Ready | 2026-04-09     ║
+     ║  END TRADESHEET v1.2.0 — Merge-Ready Build | 2026-04-09     ║
      ╚══════════════════════════════════════════════════════════════╝ -->
 </body>
 </html>
